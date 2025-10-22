@@ -11,6 +11,7 @@ import {
   SafeAreaProvider,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
+import PrinterList from './src/PrinterList';
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
@@ -28,10 +29,11 @@ function AppContent() {
 
   return (
     <View style={styles.container}>
-      <NewAppScreen
+      {/* <NewAppScreen
         templateFileName="App.tsx"
         safeAreaInsets={safeAreaInsets}
-      />
+      /> */}
+      <PrinterList />
     </View>
   );
 }
