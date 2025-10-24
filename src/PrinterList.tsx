@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   StyleSheet,
   Alert,
+  Linking,
   Permission,
 } from 'react-native';
 import RNBluetoothClassic, {
@@ -16,22 +17,61 @@ import RNBluetoothClassic, {
 } from 'react-native-bluetooth-classic';
 import { printTest } from './PrintTest';
 
+/* ---------------------------------------------------------
+   REQUEST BLUETOOTH PERMISSIONS
+--------------------------------------------------------- */
 async function requestPermissions(): Promise<boolean> {
   if (Platform.OS !== 'android') return true;
+
   const permissions: Permission[] = [];
+
   if (Platform.Version >= 31) {
-    permissions.push(PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT);
-    permissions.push(PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN);
-    permissions.push(PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE);
+    permissions.push(
+      PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+      PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+      PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE,
+      PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION, // extra safety for some OEMs
+    );
   } else {
     permissions.push(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
   }
+
   const granted = await PermissionsAndroid.requestMultiple(permissions);
-  return Object.values(granted).every(
-    v => v === PermissionsAndroid.RESULTS.GRANTED,
+  console.log('🔐 Granted permissions:', granted);
+
+  const denied = Object.entries(granted).filter(
+    ([, result]) => result !== PermissionsAndroid.RESULTS.GRANTED,
   );
+
+  if (denied.length > 0) {
+    const permanentlyDenied = denied.some(
+      ([, result]) => result === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN,
+    );
+
+    if (permanentlyDenied) {
+      Alert.alert(
+        'Bluetooth Permissions Needed',
+        'You have permanently denied Bluetooth permissions. Please enable them in system settings to continue.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() },
+        ],
+      );
+    } else {
+      Alert.alert(
+        'Bluetooth Permissions Needed',
+        'Please grant Bluetooth permissions to use this feature.',
+      );
+    }
+    return false;
+  }
+
+  return true;
 }
 
+/* ---------------------------------------------------------
+   PRINTER LIST COMPONENT
+--------------------------------------------------------- */
 export default function PrinterList() {
   const [devices, setDevices] = useState<BluetoothDevice[]>([]);
   const [discovered, setDiscovered] = useState<BluetoothDevice[]>([]);
@@ -41,36 +81,37 @@ export default function PrinterList() {
   const [busyDevice, setBusyDevice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // ---------------- INIT ----------------
+  /* ---------------- INIT ---------------- */
   useEffect(() => {
-    (async () => {
-      console.log('🔵 Bluetooth init...');
-      const ok = await requestPermissions();
-      if (!ok) {
-        setError('Bluetooth permissions not granted');
-        setLoading(false);
-        return;
-      }
-
-      try {
-        let enabled = await RNBluetoothClassic.isBluetoothEnabled();
-        if (!enabled) {
-          const userEnabled =
-            await RNBluetoothClassic.requestBluetoothEnabled();
-          if (!userEnabled) throw new Error('Bluetooth not enabled');
-        }
-
-        await loadBondedDevices();
-      } catch (e: any) {
-        console.error('[BT] Init error:', e);
-        setError(e.message || 'Unknown Bluetooth error');
-      } finally {
-        setLoading(false);
-      }
-    })();
+    initBluetooth();
   }, []);
 
-  // ---------------- LOAD BONDED ----------------
+  const initBluetooth = async () => {
+    console.log('🔵 Initializing Bluetooth...');
+    const ok = await requestPermissions();
+
+    if (!ok) {
+      setError('Bluetooth permissions not granted');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      let enabled = await RNBluetoothClassic.isBluetoothEnabled();
+      if (!enabled) {
+        const userEnabled = await RNBluetoothClassic.requestBluetoothEnabled();
+        if (!userEnabled) throw new Error('Bluetooth not enabled');
+      }
+      await loadBondedDevices();
+    } catch (e: any) {
+      console.error('[BT] Init error:', e);
+      setError(e.message || 'Unknown Bluetooth error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* ---------------- LOAD BONDED DEVICES ---------------- */
   const loadBondedDevices = useCallback(async () => {
     try {
       const bonded = await RNBluetoothClassic.getBondedDevices();
@@ -82,7 +123,7 @@ export default function PrinterList() {
     }
   }, []);
 
-  // ---------------- DISCOVER NEW DEVICES ----------------
+  /* ---------------- DISCOVER NEW DEVICES ---------------- */
   const startDiscovery = async () => {
     if (scanning) return;
     try {
@@ -100,7 +141,7 @@ export default function PrinterList() {
     }
   };
 
-  // ---------------- PAIR DEVICE ----------------
+  /* ---------------- PAIR DEVICE ---------------- */
   const pairDevice = async (device: BluetoothDevice) => {
     setBusyDevice(device.address);
     try {
@@ -115,7 +156,7 @@ export default function PrinterList() {
     }
   };
 
-  // ---------------- UNPAIR DEVICE ----------------
+  /* ---------------- UNPAIR DEVICE ---------------- */
   const unpairDevice = async (device: BluetoothDevice) => {
     setBusyDevice(device.address);
     try {
@@ -130,19 +171,17 @@ export default function PrinterList() {
     }
   };
 
-  // ---------------- CONNECT / DISCONNECT ----------------
+  /* ---------------- CONNECT / DISCONNECT ---------------- */
   const toggleConnection = async (device: BluetoothDevice) => {
     setBusyDevice(device.address);
-
     try {
       const isConnected = await device.isConnected();
 
       if (isConnected) {
-        // 🔴 Disconnect current device
         await device.disconnect();
         Alert.alert('Disconnected', `${device.name} disconnected`);
       } else {
-        // 🔍 Find if another device is already connected
+        // Disconnect any previously connected device
         for (const d of devices) {
           if (d.address !== device.address) {
             const connected = await d.isConnected();
@@ -152,12 +191,9 @@ export default function PrinterList() {
             }
           }
         }
-
-        // ✅ Connect to the selected device
         await device.connect();
         Alert.alert('Connected', `${device.name} connected`);
       }
-
       await updateStatuses(devices);
     } catch (e) {
       console.error('[BT] Connection toggle error:', e);
@@ -167,7 +203,7 @@ export default function PrinterList() {
     }
   };
 
-  // ---------------- UPDATE CONNECTION STATUSES ----------------
+  /* ---------------- UPDATE CONNECTION STATUSES ---------------- */
   const updateStatuses = async (deviceList: BluetoothDevice[]) => {
     const newStatuses: Record<string, string> = {};
     for (const d of deviceList) {
@@ -181,7 +217,7 @@ export default function PrinterList() {
     setStatuses(newStatuses);
   };
 
-  // ---------------- UI ----------------
+  /* ---------------- UI ---------------- */
   if (loading)
     return (
       <View style={styles.center}>
@@ -194,6 +230,19 @@ export default function PrinterList() {
     return (
       <View style={styles.center}>
         <Text style={[styles.status, { color: 'red' }]}>Error: {error}</Text>
+        <TouchableOpacity
+          style={[
+            styles.actionBtn,
+            { backgroundColor: '#007aff', marginTop: 12 },
+          ]}
+          onPress={async () => {
+            setError(null);
+            setLoading(true);
+            await initBluetooth();
+          }}
+        >
+          <Text style={styles.actionText}>Grant Permissions</Text>
+        </TouchableOpacity>
       </View>
     );
 
@@ -231,10 +280,9 @@ export default function PrinterList() {
                   </Text>
                 </TouchableOpacity>
 
-                {/* ✅ Add Print Test button here */}
                 {statuses[item.address]?.includes('Connected') && (
                   <TouchableOpacity
-                    onPress={() => printTest(item)} // <- item is the printer device
+                    onPress={() => printTest(item)}
                     style={[
                       styles.actionSmallBtn,
                       { backgroundColor: '#4CAF50', marginRight: 8 },
@@ -299,7 +347,9 @@ export default function PrinterList() {
   );
 }
 
-// ---------------- STYLES ----------------
+/* ---------------------------------------------------------
+   STYLES
+--------------------------------------------------------- */
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
