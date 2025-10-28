@@ -2,6 +2,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { QueryClient, QueryFunction } from '@tanstack/react-query';
 
+// export const BASE_URL = 'http://192.168.100.5:3001';
 export const BASE_URL = 'https://nagawings.com';
 
 // --------------------
@@ -34,13 +35,11 @@ export async function apiRequest<T>(
 
   if (token) headers['Authorization'] = `Bearer ${token}`;
   if (data) headers['Content-Type'] = 'application/json';
-
   const res = await fetch(`${BASE_URL}/api${url}`, {
     method,
     headers,
     body: data ? JSON.stringify(data) : undefined,
   });
-
   if (res.status === 401) {
     throw new Error('Unauthorized. Please log in again.');
   }

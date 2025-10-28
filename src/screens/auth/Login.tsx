@@ -33,6 +33,7 @@ export default function Login() {
 
   const getErrorMessage = () => {
     const err = loginMutation.error as any;
+    console.log('err', err);
     if (!err) return '';
 
     const message =

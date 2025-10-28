@@ -7,7 +7,6 @@ import {
   Platform,
   TouchableOpacity,
   ActivityIndicator,
-  StyleSheet,
   Alert,
   Linking,
   Permission,
@@ -15,7 +14,8 @@ import {
 import RNBluetoothClassic, {
   BluetoothDevice,
 } from 'react-native-bluetooth-classic';
-import { printTest } from './PrintTest';
+import Icon from '@react-native-vector-icons/feather';
+import { useBluetooth } from '../../../contexts/PrinterContext';
 
 /* ---------------------------------------------------------
    REQUEST BLUETOOTH PERMISSIONS
@@ -30,7 +30,7 @@ async function requestPermissions(): Promise<boolean> {
       PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
       PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
       PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE,
-      PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION, // extra safety for some OEMs
+      PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
     );
   } else {
     permissions.push(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
@@ -72,7 +72,7 @@ async function requestPermissions(): Promise<boolean> {
 /* ---------------------------------------------------------
    PRINTER LIST COMPONENT
 --------------------------------------------------------- */
-export default function PrinterList() {
+export default function PrinterList({ navigation }: any) {
   const [devices, setDevices] = useState<BluetoothDevice[]>([]);
   const [discovered, setDiscovered] = useState<BluetoothDevice[]>([]);
   const [statuses, setStatuses] = useState<Record<string, string>>({});
@@ -80,8 +80,8 @@ export default function PrinterList() {
   const [scanning, setScanning] = useState(false);
   const [busyDevice, setBusyDevice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { setConnectedDevice } = useBluetooth();
 
-  /* ---------------- INIT ---------------- */
   useEffect(() => {
     initBluetooth();
   }, []);
@@ -111,7 +111,6 @@ export default function PrinterList() {
     }
   };
 
-  /* ---------------- LOAD BONDED DEVICES ---------------- */
   const loadBondedDevices = useCallback(async () => {
     try {
       const bonded = await RNBluetoothClassic.getBondedDevices();
@@ -123,7 +122,6 @@ export default function PrinterList() {
     }
   }, []);
 
-  /* ---------------- DISCOVER NEW DEVICES ---------------- */
   const startDiscovery = async () => {
     if (scanning) return;
     try {
@@ -141,7 +139,6 @@ export default function PrinterList() {
     }
   };
 
-  /* ---------------- PAIR DEVICE ---------------- */
   const pairDevice = async (device: BluetoothDevice) => {
     setBusyDevice(device.address);
     try {
@@ -156,7 +153,6 @@ export default function PrinterList() {
     }
   };
 
-  /* ---------------- UNPAIR DEVICE ---------------- */
   const unpairDevice = async (device: BluetoothDevice) => {
     setBusyDevice(device.address);
     try {
@@ -171,7 +167,6 @@ export default function PrinterList() {
     }
   };
 
-  /* ---------------- CONNECT / DISCONNECT ---------------- */
   const toggleConnection = async (device: BluetoothDevice) => {
     setBusyDevice(device.address);
     try {
@@ -179,21 +174,21 @@ export default function PrinterList() {
 
       if (isConnected) {
         await device.disconnect();
+        setConnectedDevice(null);
         Alert.alert('Disconnected', `${device.name} disconnected`);
       } else {
-        // Disconnect any previously connected device
         for (const d of devices) {
           if (d.address !== device.address) {
             const connected = await d.isConnected();
-            if (connected) {
-              console.log(`[BT] Disconnecting previous device: ${d.name}`);
-              await d.disconnect();
-            }
+            if (connected) await d.disconnect();
           }
         }
+
         await device.connect();
+        setConnectedDevice(device);
         Alert.alert('Connected', `${device.name} connected`);
       }
+
       await updateStatuses(devices);
     } catch (e) {
       console.error('[BT] Connection toggle error:', e);
@@ -203,7 +198,6 @@ export default function PrinterList() {
     }
   };
 
-  /* ---------------- UPDATE CONNECTION STATUSES ---------------- */
   const updateStatuses = async (deviceList: BluetoothDevice[]) => {
     const newStatuses: Record<string, string> = {};
     for (const d of deviceList) {
@@ -220,44 +214,51 @@ export default function PrinterList() {
   /* ---------------- UI ---------------- */
   if (loading)
     return (
-      <View style={styles.center}>
+      <View className="flex-1 items-center justify-center">
         <ActivityIndicator size="large" />
-        <Text style={styles.status}>Loading Bluetooth...</Text>
+        <Text className="mt-2 text-gray-600">Loading Bluetooth...</Text>
       </View>
     );
 
   if (error)
     return (
-      <View style={styles.center}>
-        <Text style={[styles.status, { color: 'red' }]}>Error: {error}</Text>
+      <View className="flex-1 items-center justify-center">
+        <Text className="text-red-600 font-medium">Error: {error}</Text>
         <TouchableOpacity
-          style={[
-            styles.actionBtn,
-            { backgroundColor: '#007aff', marginTop: 12 },
-          ]}
+          className="mt-4 bg-blue-500 px-6 py-3 rounded-lg"
           onPress={async () => {
             setError(null);
             setLoading(true);
             await initBluetooth();
           }}
         >
-          <Text style={styles.actionText}>Grant Permissions</Text>
+          <Text className="text-white font-semibold">Grant Permissions</Text>
         </TouchableOpacity>
       </View>
     );
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.heading}>Paired Devices</Text>
+    <View className="flex-1 p-4 bg-white">
+      {/* Header */}
+      <View className="flex-row items-center gap-3 mb-4">
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Icon name="arrow-left" size={24} color="#007AFF" />
+        </TouchableOpacity>
+        <Text className="text-lg font-bold text-gray-800">Paired Devices</Text>
+      </View>
+
+      {/* Bonded Devices List */}
       <FlatList
         data={devices}
         keyExtractor={item => item.address}
         renderItem={({ item }) => (
-          <View style={styles.deviceCard}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.deviceName}>{item.name || 'Unknown'}</Text>
-              <Text style={styles.address}>{item.address}</Text>
-              <Text style={styles.statusText}>
+          <View className="flex-row items-center p-3 border border-gray-300 rounded-xl mb-3">
+            <View className="flex-1">
+              <Text className="font-semibold text-gray-900">
+                {item.name || 'Unknown'}
+              </Text>
+              <Text className="text-xs text-gray-500">{item.address}</Text>
+              <Text className="text-xs mt-1">
                 {statuses[item.address] || '⏳ Checking...'}
               </Text>
             </View>
@@ -265,78 +266,62 @@ export default function PrinterList() {
             {busyDevice === item.address ? (
               <ActivityIndicator size="small" />
             ) : (
-              <>
+              <View className="flex-row gap-2">
                 <TouchableOpacity
                   onPress={() => toggleConnection(item)}
-                  style={[
-                    styles.actionSmallBtn,
-                    { backgroundColor: '#007AFF', marginRight: 8 },
-                  ]}
+                  className="bg-blue-500 px-3 py-2 rounded-md"
                 >
-                  <Text style={{ color: '#fff' }}>
+                  <Text className="text-white text-sm font-medium">
                     {statuses[item.address]?.includes('Connected')
                       ? 'Disconnect'
                       : 'Connect'}
                   </Text>
                 </TouchableOpacity>
 
-                {statuses[item.address]?.includes('Connected') && (
-                  <TouchableOpacity
-                    onPress={() => printTest(item)}
-                    style={[
-                      styles.actionSmallBtn,
-                      { backgroundColor: '#4CAF50', marginRight: 8 },
-                    ]}
-                  >
-                    <Text style={{ color: '#fff' }}>Print Test</Text>
-                  </TouchableOpacity>
-                )}
-
                 <TouchableOpacity
                   onPress={() => unpairDevice(item)}
-                  style={[styles.actionSmallBtn, { backgroundColor: '#d33' }]}
+                  className="bg-red-600 px-3 py-2 rounded-md"
                 >
-                  <Text style={{ color: '#fff' }}>Remove</Text>
+                  <Text className="text-white text-sm font-medium">Remove</Text>
                 </TouchableOpacity>
-              </>
+              </View>
             )}
           </View>
         )}
       />
 
+      {/* Discover Button */}
       <TouchableOpacity
-        style={[styles.actionBtn, { backgroundColor: '#007aff' }]}
+        className="bg-blue-600 mt-4 py-3 rounded-xl items-center"
         onPress={startDiscovery}
       >
-        <Text style={styles.actionText}>
+        <Text className="text-white font-semibold text-base">
           {scanning ? 'Scanning...' : '🔍 Discover New Devices'}
         </Text>
       </TouchableOpacity>
 
+      {/* Discovered Devices */}
       {discovered.length > 0 && (
         <>
-          <Text style={[styles.heading, { marginTop: 16 }]}>
+          <Text className="text-lg font-bold mt-5 mb-2 text-gray-800">
             Discovered Devices
           </Text>
           <FlatList
             data={discovered}
             keyExtractor={item => item.address}
             renderItem={({ item }) => (
-              <View style={styles.deviceCard}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.deviceName}>
+              <View className="flex-row items-center p-3 border border-gray-300 rounded-xl mb-3">
+                <View className="flex-1">
+                  <Text className="font-semibold text-gray-900">
                     {item.name || 'Unknown'}
                   </Text>
-                  <Text style={styles.address}>{item.address}</Text>
+                  <Text className="text-xs text-gray-500">{item.address}</Text>
                 </View>
                 <TouchableOpacity
                   onPress={() => pairDevice(item)}
-                  style={[
-                    styles.actionSmallBtn,
-                    { backgroundColor: '#4CAF50' },
-                  ]}
+                  className="bg-green-500 px-3 py-2 rounded-md"
                 >
-                  <Text style={{ color: '#fff' }}>Pair</Text>
+                  <Text className="text-white text-sm font-medium">Pair</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -346,37 +331,3 @@ export default function PrinterList() {
     </View>
   );
 }
-
-/* ---------------------------------------------------------
-   STYLES
---------------------------------------------------------- */
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  heading: { fontWeight: 'bold', marginBottom: 8, fontSize: 16 },
-  deviceCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  deviceName: { fontWeight: '600' },
-  address: { fontSize: 12, color: '#555' },
-  statusText: { fontSize: 12, marginTop: 4 },
-  actionSmallBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-  },
-  actionBtn: {
-    marginTop: 12,
-    padding: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  actionText: { color: '#fff', fontWeight: 'bold' },
-  status: { marginTop: 8 },
-});

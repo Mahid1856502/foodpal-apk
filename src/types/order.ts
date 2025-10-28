@@ -1,26 +1,25 @@
 // src/types/order.ts
 
-import { Order } from "./base";
+import { Order } from './base';
 
 // 🏦 Payment + Order Enums
 export type PAYMENT_METHOD =
-  | "CASH"
-  | "CREDIT_CARD"
-  | "DEBIT_CARD"
-  | "MOBILE_PAYMENT";
+  | 'CASH'
+  | 'CREDIT_CARD'
+  | 'DEBIT_CARD'
+  | 'MOBILE_PAYMENT';
 
-export type ORDER_TYPE = "DINE_IN" | "TAKEAWAY" | "DELIVERY";
+export type ORDER_TYPE = 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY';
 
 export type ORDER_STATUS =
-  | "PENDING"
-  | "CONFIRMED"
-  | "PREPARING"
-  | "READY"
-  | "DELIVERING"
-  | "COMPLETED"
-  | "CANCELLED";
+  | 'PENDING'
+  | 'CONFIRMED'
+  | 'PREPARING'
+  | 'READY'
+  | 'COMPLETED'
+  | 'CANCELLED';
 
-export type PAYMENT_STATUS = "PENDING" | "PAID" | "FAILED" | "REFUNDED";
+export type PAYMENT_STATUS = 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED';
 
 // 🍔 Add-on inside cart or order
 export interface AddOnInput {

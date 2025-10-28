@@ -3,10 +3,12 @@ import { View, TouchableOpacity, Text, Platform } from 'react-native';
 import Icon, { FeatherIconName } from '@react-native-vector-icons/feather';
 import useResponsiveLayout from '../hooks/custom/useResponsiveLayout';
 
-type TabItem = {
+export type TabItem = {
+  newOrders?: string;
   label: string;
   icon: FeatherIconName;
   onPress: () => void;
+  key: string;
 };
 
 interface FloatingTabBarProps {
@@ -19,7 +21,6 @@ export default function FloatingTabBar({
   activeIndex = 0,
 }: FloatingTabBarProps) {
   const { isLandscape } = useResponsiveLayout();
-
   return (
     <View
       className={`absolute z-[999] bg-white rounded-2xl shadow-2xl  p-3 gap-3 ${
@@ -33,19 +34,27 @@ export default function FloatingTabBar({
       {tabs.map((tab, i) => {
         const active = activeIndex === i;
         return (
-          <TouchableOpacity
-            key={i}
-            onPress={tab.onPress}
-            className={`flex items-center ${
-              isLandscape ? 'p-4' : 'py-2 px-3'
-            } ${active ? 'bg-blue-100 rounded-xl' : ''}`}
-          >
-            <Icon
-              name={tab.icon}
-              size={20}
-              color={active ? '#007bff' : '#333'}
-            />
-            {!isLandscape && (
+          <View key={i} className="relative">
+            {tab.newOrders && parseInt(tab.newOrders) > 0 && (
+              <View className="absolute -top-2 -right-2 bg-red-600 rounded-full w-5 h-5 justify-center items-center z-10">
+                <Text className="text-white text-xs font-bold">
+                  {tab.newOrders}
+                </Text>
+              </View>
+            )}
+            <TouchableOpacity
+              key={i}
+              onPress={tab.onPress}
+              className={`flex items-center ${
+                isLandscape ? 'p-4' : 'py-2 px-3'
+              } ${active ? 'bg-blue-100 rounded-xl' : ''}`}
+            >
+              <Icon
+                name={tab.icon}
+                size={20}
+                color={active ? '#007bff' : '#333'}
+              />
+              {/* {!isLandscape && (
               <Text
                 className={`text-xs font-medium ${
                   active ? 'text-blue-600' : 'text-gray-700'
@@ -53,8 +62,9 @@ export default function FloatingTabBar({
               >
                 {tab.label}
               </Text>
-            )}
-          </TouchableOpacity>
+            )} */}
+            </TouchableOpacity>
+          </View>
         );
       })}
     </View>

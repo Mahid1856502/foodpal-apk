@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Order } from '../../../types/base';
+import { Order, OrderStatus } from '../../../types/base';
 import { TodayOrdersResponse } from '../../../types/order';
 import { apiRequest } from '../../../utils/api';
 
@@ -30,8 +30,12 @@ export function useAcceptOrder(branchId?: string) {
     { previousData?: TodayOrdersResponse }
   >({
     // ✅ Accept optional etaMinutes
-    mutationFn: ({ orderId, etaMinutes }) =>
-      apiRequest<Order>('POST', `/orders/${orderId}/accept`, { etaMinutes }),
+    mutationFn: ({ orderId, etaMinutes }) => {
+      console.log('orderId, etaMinutes', orderId, etaMinutes);
+      return apiRequest<Order>('POST', `/orders/${orderId}/accept`, {
+        etaMinutes,
+      });
+    },
 
     // ✅ Optimistic update
     onMutate: async ({ orderId }) => {
@@ -80,7 +84,7 @@ export function useAcceptOrder(branchId?: string) {
 }
 
 /** -----------------------------
- * Mark order as ready (preparing → delivering)
+ * Mark order as ready (preparing → ready)
  * ----------------------------- */
 export function useMarkReady(branchId?: string) {
   const queryClient = useQueryClient();
@@ -111,7 +115,7 @@ export function useMarkReady(branchId?: string) {
           {
             ...previousData,
             orders: previousData.orders.map(o =>
-              o.id === orderId ? { ...o, status: 'DELIVERING' } : o,
+              o.id === orderId ? { ...o, status: 'READY' } : o,
             ),
           },
         );
@@ -138,7 +142,7 @@ export function useMarkReady(branchId?: string) {
 }
 
 /** -----------------------------
- * Mark order as done (delivering → completed)
+ * Mark order as done (ready → completed)
  * ----------------------------- */
 export function useMarkDone(branchId?: string) {
   const queryClient = useQueryClient();
@@ -253,5 +257,79 @@ export function useRejectOrder(branchId?: string) {
         queryKey: ['orders', 'today', branchId],
       });
     },
+  });
+}
+
+/**
+ * Response type for cancelled orders grouped by date
+ */
+export interface GroupedOrders {
+  date: string;
+  count: number;
+  orders: Order[];
+}
+
+/**
+ * ✅ Fetch grouped orders filtered by status (and optionally branch)
+ * Example:
+ *   const { data, isLoading } = useGroupedOrders(branchId, OrderStatus.CANCELLED);
+ */
+export function useGroupedOrders(branchId?: string, status?: OrderStatus) {
+  return useQuery<GroupedOrders[], Error>({
+    queryKey: ['orders', 'grouped', status, branchId],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (branchId) params.append('branchId', branchId);
+      if (status) params.append('status', status);
+
+      return apiRequest<GroupedOrders[]>(
+        'GET',
+        `/orders/grouped${params.toString() ? `?${params.toString()}` : ''}`,
+      );
+    },
+    enabled: !!branchId, // only fetch when both exist
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+/** -----------------------------
+ * 📊 Fetch daily sales summary
+ * ----------------------------- */
+export interface SalesSummary {
+  date: string;
+  branchId: string;
+  totalOrders: number;
+  totalSales: number;
+  paymentBreakdown: {
+    card: number;
+    cash: number;
+  };
+  orderTypeBreakdown: {
+    delivered: number;
+    pickedUp: number;
+  };
+}
+
+/**
+ * Usage:
+ *   const { data, isLoading } = useSalesSummary(branchId, '2025-10-27');
+ */
+export function useSalesSummary(branchId?: string, date?: string) {
+  return useQuery<SalesSummary, Error>({
+    queryKey: ['sales', 'summary', branchId, date],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (branchId) params.append('branchId', branchId);
+      if (date) params.append('date', date);
+
+      return apiRequest<SalesSummary>(
+        'GET',
+        `/orders/sales-summary${params.toString() ? `?${params.toString()}` : ''}`,
+      );
+    },
+    enabled: !!branchId, // only fetch if branchId is provided
+    staleTime: 2 * 60 * 1000, // 2 minutes cache
+    refetchOnWindowFocus: false,
   });
 }

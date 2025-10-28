@@ -1,19 +1,18 @@
-export type Role = "ADMIN" | "MANAGER" | "STAFF" | "CUSTOMER";
+export type Role = 'ADMIN' | 'MANAGER' | 'STAFF' | 'CUSTOMER';
 export type OrderStatus =
-  | "PENDING"
-  | "CONFIRMED"
-  | "PREPARING"
-  | "READY"
-  | "DELIVERING"
-  | "COMPLETED"
-  | "CANCELLED";
-export type PaymentStatus = "PENDING" | "PAID" | "FAILED" | "REFUNDED";
+  | 'PENDING' // New order placed, awaiting confirmation
+  | 'PREPARING' // Once accepted, kitchen starts preparing
+  | 'READY' // Order is ready for pickup/delivery
+  | 'COMPLETED' // Order has been delivered/picked up successfully
+  | 'CANCELLED'; // TODO: Add a cancellation reason column in Orders table
+
+export type PaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED';
 export type PaymentMethod =
-  | "CASH"
-  | "CREDIT_CARD"
-  | "DEBIT_CARD"
-  | "MOBILE_PAYMENT";
-export type OrderType = "DINE_IN" | "TAKEAWAY" | "DELIVERY";
+  | 'CASH'
+  | 'CREDIT_CARD'
+  | 'DEBIT_CARD'
+  | 'MOBILE_PAYMENT';
+export type OrderType = 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY';
 
 export interface Restaurant {
   id: string;

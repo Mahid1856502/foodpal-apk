@@ -9,6 +9,10 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 // import ProfileScreen from '../screens/main/ProfileScreen';
 import { useAuth } from '../contexts/AuthContext';
 import OrderPad from '../screens/main/OrderPad';
+import PrinterList from '../screens/main/printer-settings/PrinterList';
+import OrdersSummary from '../screens/main/OrdersSummary';
+import StopOrders from '../screens/main/StopOrders';
+import TakeOffMenu from '../screens/main/TakeOffMenu';
 
 export type AppTabParamList = {
   OrderPad: undefined;
@@ -22,8 +26,6 @@ export type AppTabParamList = {
 const Tab = createBottomTabNavigator<AppTabParamList>();
 
 export default function AppNavigator() {
-  const { logout } = useAuth();
-  console.log('OrderPad', OrderPad);
   return (
     <Tab.Navigator
       screenOptions={{
@@ -32,10 +34,11 @@ export default function AppNavigator() {
       }}
     >
       <Tab.Screen name="OrderPad" component={OrderPad} />
+      <Tab.Screen name="Settings" component={PrinterList} />
+      <Tab.Screen name="OrdersSummary" component={OrdersSummary} />
+      <Tab.Screen name="StopOrders" component={StopOrders} />
+      <Tab.Screen name="TakeOffMenu" component={TakeOffMenu} />
       {/* <Tab.Screen name="OrdersSummary" component={OrdersSummaryScreen} />
-      <Tab.Screen name="TakeOffMenu" component={TakeOffMenuScreen} />
-      <Tab.Screen name="StopOrders" component={StopOrdersScreen} />
-      <Tab.Screen name="Settings" component={SettingsScreen} />
       <Tab.Screen
         name="Profile"
         component={ProfileScreen}

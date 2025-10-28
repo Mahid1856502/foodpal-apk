@@ -1,15 +1,8 @@
 import React, { useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  RefreshControl,
-  Modal,
-  TouchableOpacity,
-} from 'react-native';
+import { View, Text, ScrollView, RefreshControl } from 'react-native';
 import FloatingTabBar from '../../components/FloatingTabBar';
-import ExpandableOrderCard from '../../components/ExpandableOrderCard';
-import { useNavigation } from '@react-navigation/native';
+import OrderCard from '../../components/ExpandableOrderCard';
+
 import {
   useAcceptOrder,
   useMarkDone,
@@ -17,48 +10,99 @@ import {
   useRejectOrder,
   useTodayOrders,
 } from '../../hooks/api/orders/useOrders';
+
 import { useAuth } from '../../contexts/AuthContext';
 import useResponsiveLayout from '../../hooks/custom/useResponsiveLayout';
 import { Order } from '../../types/base';
+import { FeatherIconName } from '@react-native-vector-icons/feather';
+import OrderMenuPopup from '../../components/MenuModal';
 
 export default function OrderPad() {
-  const { user } = useAuth();
-  const branchId = user?.branchId ?? '';
-  const { data, refetch, isFetching } = useTodayOrders(branchId);
-  const navigation = useNavigation();
+  const { user, logout } = useAuth();
   const { isLandscape } = useResponsiveLayout();
 
-  const [refreshing, setRefreshing] = useState(false);
+  const branchId = user?.branchId ?? '';
+
+  const [activeTab, setActiveTab] = useState<
+    'NEW' | 'PREPARING' | 'READY' | 'COMPLETED'
+  >('NEW');
   const [isMenuVisible, setIsMenuVisible] = useState(false);
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await refetch();
-    setRefreshing(false);
-  }, [refetch]);
-
+  // --- Fetch and refresh orders ---
+  const { data, refetch, isFetching } = useTodayOrders(branchId);
   const orders = data?.orders || [];
 
+  // --- Order mutations ---
   const acceptOrder = useAcceptOrder(branchId);
   const rejectOrder = useRejectOrder(branchId);
   const markReady = useMarkReady(branchId);
   const markDone = useMarkDone(branchId);
 
-  const handleAccept = (orderId: string) => {
-    acceptOrder.mutate({ orderId, etaMinutes: 15 });
+  // --- Refresh handler ---
+  const onRefresh = useCallback(() => {
+    refetch();
+  }, [refetch]);
+
+  // --- Order action handlers ---
+  const handleAccept = (order: Order) => {
+    if (order.status !== 'PENDING') return;
+    acceptOrder.mutate({ orderId: order.id, etaMinutes: 15 });
   };
 
-  const handleReject = (orderId: string) => {
-    rejectOrder.mutate(orderId);
+  const handleReject = (order: Order) => {
+    if (order.status !== 'PENDING') return;
+    rejectOrder.mutate(order.id);
   };
 
-  const handleMarkReady = (orderId: string) => {
-    markReady.mutate(orderId);
+  const handleMarkReady = (order: Order) => {
+    if (order.status !== 'PREPARING') return;
+    markReady.mutate(order.id);
   };
 
-  const handleMarkDone = (orderId: string) => {
-    markDone.mutate(orderId);
+  const handleMarkDone = (order: Order) => {
+    if (order.status !== 'READY') return;
+    markDone.mutate(order.id);
   };
+
+  // --- Tab filtering ---
+  const filteredOrders = orders.filter(order => {
+    switch (activeTab) {
+      case 'NEW':
+        return order.status === 'PENDING';
+      case 'PREPARING':
+        return order.status === 'PREPARING';
+      case 'READY':
+        return order.status === 'READY';
+      case 'COMPLETED':
+        return order.status === 'COMPLETED';
+      default:
+        return true;
+    }
+  });
+
+  const tabLabels: Record<string, string> = {
+    NEW: 'new',
+    PREPARING: 'preparing',
+    READY: 'ready',
+    COMPLETED: 'completed',
+  };
+
+  const tabs = [
+    { label: 'Menu', icon: 'menu' as FeatherIconName, key: 'MENU' },
+    {
+      label: 'New',
+      icon: 'shopping-bag' as FeatherIconName,
+      key: 'NEW',
+      newOrders: orders.filter(o => o.status === 'PENDING').length.toString(),
+    },
+    { label: 'Preparing', icon: 'clock' as FeatherIconName, key: 'PREPARING' },
+    { label: 'Ready', icon: 'bell' as FeatherIconName, key: 'READY' },
+    {
+      label: 'Done',
+      icon: 'check-circle' as FeatherIconName,
+      key: 'COMPLETED',
+    },
+  ];
 
   return (
     <View
@@ -67,98 +111,52 @@ export default function OrderPad() {
       }`}
     >
       <Text className="text-2xl font-bold mb-4 text-center">Order Pad</Text>
-
       <ScrollView
-        className="flex-1"
+        className={`flex-1 ${isLandscape ? 'mb-0' : 'mb-20'}`}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing || isFetching}
-            onRefresh={onRefresh}
-          />
+          <RefreshControl refreshing={isFetching} onRefresh={onRefresh} />
         }
       >
-        {orders.length > 0 ? (
-          orders.map((order: Order) => (
-            <ExpandableOrderCard
+        {filteredOrders.length > 0 ? (
+          filteredOrders.map((order: Order) => (
+            <OrderCard
               key={order.id}
               order={order}
-              onAccept={() => handleAccept(order.id)}
-              onReject={() => handleReject(order.id)}
-              onMarkReady={() => handleMarkReady(order.id)}
-              onMarkDone={() => handleMarkDone(order.id)}
+              onAccept={() => handleAccept(order)}
+              onReject={() => handleReject(order)}
+              onMarkReady={() => handleMarkReady(order)}
+              onMarkDone={() => handleMarkDone(order)}
             />
           ))
         ) : (
           <Text className="text-gray-500 text-center mt-10">
-            No orders for today.
+            No {tabLabels[activeTab]} orders for today.
           </Text>
         )}
       </ScrollView>
 
-      {/* Menu modal */}
-      <Modal
+      {/* --- Menu Modal --- */}
+
+      <OrderMenuPopup
         visible={isMenuVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setIsMenuVisible(false)}
-      >
-        <View className="flex-1 justify-center items-center bg-black/50">
-          <View className="bg-white rounded-2xl w-4/5 p-6">
-            <Text className="text-lg font-semibold mb-4 text-center">
-              Menu Actions
-            </Text>
+        onClose={() => setIsMenuVisible(false)}
+        onLogout={logout}
+      />
 
-            {/* Example options */}
-            <TouchableOpacity
-              onPress={() => {
-                setIsMenuVisible(false);
-                navigation.navigate('OrdersSummary' as never);
-              }}
-              className="bg-blue-600 p-3 rounded-lg mb-3"
-            >
-              <Text className="text-white text-center font-semibold">
-                Go to Orders Summary
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => setIsMenuVisible(false)}
-              className="bg-gray-300 p-3 rounded-lg"
-            >
-              <Text className="text-gray-800 text-center font-semibold">
-                Close
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Floating tab bar */}
+      {/* --- Floating Tab Bar --- */}
       <FloatingTabBar
-        activeIndex={1}
-        tabs={[
-          {
-            label: 'Menu',
-            icon: 'list',
-            onPress: () => setIsMenuVisible(true),
+        activeIndex={tabs.findIndex(t => t.key === activeTab) ?? 1}
+        tabs={tabs.map(t => ({
+          label: t.label,
+          icon: t.icon,
+          key: t.key,
+          newOrders: t.newOrders,
+          onPress: () => {
+            if (t.key === 'MENU') setIsMenuVisible(true);
+            else setActiveTab(t.key as typeof activeTab);
           },
-          {
-            label: 'New Orders',
-            icon: 'shopping-bag',
-            onPress: () => navigation.navigate('NewOrders' as never),
-          },
-          {
-            label: 'Preparing',
-            icon: 'clock',
-            onPress: () => navigation.navigate('Preparing' as never),
-          },
-          {
-            label: 'Done',
-            icon: 'check-circle',
-            onPress: () => navigation.navigate('DoneOrders' as never),
-          },
-        ]}
+        }))}
       />
     </View>
   );
