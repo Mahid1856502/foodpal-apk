@@ -5,6 +5,9 @@ import { Order } from '../types/base';
 import NewOrderModal from '../components/NewOrderModal';
 import { useSound } from '../hooks/custom/useSound';
 import { useAcceptOrder, useRejectOrder } from '../hooks/api/orders/useOrders';
+import { PrintOrderDetails } from '../screens/main/printer-settings/PrintOrderDetails';
+import PrintMissingModal from '../components/PrintMissingModal';
+import { useBluetooth } from './PrinterContext';
 
 type NewOrderContextType = {
   latestOrder?: Order;
@@ -16,6 +19,8 @@ export function NewOrderProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const branchId = user?.branchId ?? '';
   const { play } = useSound('notification.wav');
+  const [showPrinterModal, setShowPrinterModal] = useState(false);
+  const { connectedDevice } = useBluetooth();
 
   const [visible, setVisible] = useState(false);
   const [latestOrder, setLatestOrder] = useState<Order | undefined>();
@@ -46,10 +51,28 @@ export function NewOrderProvider({ children }: { children: React.ReactNode }) {
         visible={visible}
         order={latestOrder}
         onClose={() => setVisible(false)}
-        onAccept={(orderId, etaMinutes) =>
-          acceptOrder.mutate({ orderId, etaMinutes })
+        onAccept={(order, etaMinutes) => {
+          if (!connectedDevice) {
+            setShowPrinterModal(true);
+          } else {
+            PrintOrderDetails(connectedDevice, order);
+          }
+          acceptOrder.mutate(
+            { orderId: order.id, etaMinutes },
+            { onSuccess: () => setVisible(false) },
+          );
+        }}
+        isAccepting={
+          acceptOrder.isPending &&
+          acceptOrder.variables?.orderId === latestOrder?.id
         }
-        onReject={orderId => rejectOrder.mutate(orderId)}
+        onReject={orderId =>
+          rejectOrder.mutate(orderId, { onSuccess: () => setVisible(false) })
+        }
+      />
+      <PrintMissingModal
+        showPrinterModal={showPrinterModal}
+        setShowPrinterModal={setShowPrinterModal}
       />
     </>
   );

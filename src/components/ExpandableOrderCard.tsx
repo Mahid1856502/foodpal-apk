@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { Activity, useState } from 'react';
 import {
   View,
   Text,
@@ -6,14 +6,14 @@ import {
   LayoutAnimation,
   Image,
   useWindowDimensions,
-  Modal,
+  ActivityIndicator,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import { Order } from '../types/base';
 import { progressFor } from '../utils/helpers';
 import { BasicMenu, MenuItem } from './BasicMenu';
 import { PrintOrderDetails } from '../screens/main/printer-settings/PrintOrderDetails';
 import { useBluetooth } from '../contexts/PrinterContext';
+import PrintMissingModal from './PrintMissingModal';
 
 function colorFor(pct: number) {
   if (pct > 0.5) return 'bg-blue-100 border-blue-500';
@@ -30,25 +30,29 @@ function progressColor(pct: number) {
 interface OrderCardProps {
   order: Order;
   onAccept?: () => void;
+  isAccepting?: boolean;
   onReject?: () => void;
   onMarkReady?: () => void;
   onMarkDone?: () => void;
+  onAdjustEta?: (minsLeft: number) => void;
 }
 
 export default function OrderCard({
   order,
   onAccept,
+  isAccepting,
   onReject,
   onMarkReady,
   onMarkDone,
+  onAdjustEta,
 }: OrderCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [showPrinterModal, setShowPrinterModal] = useState(false);
+
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
 
   const { connectedDevice } = useBluetooth();
-  const navigation = useNavigation();
 
   const toggleExpand = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -85,7 +89,7 @@ export default function OrderCard({
     {
       icon: 'clock',
       label: 'Add Time',
-      onPress: () => console.log('Add Time pressed'),
+      onPress: () => onAdjustEta && onAdjustEta(minsLeft),
     },
     {
       icon: 'printer',
@@ -112,8 +116,10 @@ export default function OrderCard({
         <TouchableOpacity
           key="accept"
           onPress={onAccept}
-          className="bg-green-200 border border-green-600 rounded-full mb-2 px-4 py-2 mr-2"
+          disabled={isAccepting}
+          className="bg-green-200 border border-green-600 rounded-full mb-2 px-4 py-2 mr-2 flex-row items-center justify-center"
         >
+          {isAccepting && <ActivityIndicator />}
           <Text className="text-green-800 font-semibold text-sm">Accept</Text>
         </TouchableOpacity>,
       );
@@ -338,66 +344,10 @@ export default function OrderCard({
           </View>
         )}
       </View>
-
-      {/* -------------------------------
-          PRINTER MISSING MODAL
-      ------------------------------- */}
-      <Modal
-        visible={showPrinterModal}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setShowPrinterModal(false)}
-      >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: 'rgba(0,0,0,0.4)',
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <View
-            style={{
-              width: '80%',
-              backgroundColor: 'white',
-              borderRadius: 12,
-              padding: 20,
-              alignItems: 'center',
-            }}
-          >
-            <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 10 }}>
-              No Printer Connected
-            </Text>
-            <Text
-              style={{ textAlign: 'center', color: '#555', marginBottom: 20 }}
-            >
-              Please connect a Bluetooth printer before printing receipts.
-            </Text>
-
-            <TouchableOpacity
-              style={{
-                backgroundColor: '#007AFF',
-                paddingHorizontal: 24,
-                paddingVertical: 10,
-                borderRadius: 8,
-                marginBottom: 10,
-              }}
-              onPress={() => {
-                setShowPrinterModal(false);
-                navigation.navigate('Settings' as never);
-              }}
-            >
-              <Text style={{ color: 'white', fontWeight: '600' }}>
-                Go to Settings
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => setShowPrinterModal(false)}>
-              <Text style={{ color: '#007AFF' }}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      <PrintMissingModal
+        showPrinterModal={showPrinterModal}
+        setShowPrinterModal={setShowPrinterModal}
+      />
     </>
   );
 }

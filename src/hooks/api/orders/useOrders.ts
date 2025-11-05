@@ -38,7 +38,7 @@ export function useAcceptOrder(branchId?: string) {
     },
 
     // ✅ Optimistic update
-    onMutate: async ({ orderId }) => {
+    onMutate: async ({ orderId, etaMinutes }) => {
       await queryClient.cancelQueries({
         queryKey: ['orders', 'today', branchId],
       });
@@ -55,7 +55,14 @@ export function useAcceptOrder(branchId?: string) {
           {
             ...previousData,
             orders: previousData.orders.map(o =>
-              o.id === orderId ? { ...o, status: 'PREPARING' } : o,
+              o.id === orderId
+                ? {
+                    ...o,
+                    status: 'PREPARING',
+                    acceptedAt: new Date()?.toString(),
+                    etaMinutes: etaMinutes ?? o.etaMinutes,
+                  }
+                : o,
             ),
           },
         );
@@ -75,6 +82,67 @@ export function useAcceptOrder(branchId?: string) {
     },
 
     // ✅ Always refetch
+    onSettled: () => {
+      // queryClient.invalidateQueries({
+      //   queryKey: ['orders', 'today', branchId],
+      // });
+    },
+  });
+}
+
+/** -----------------------------
+ * Adjust ETA of an order
+ * ----------------------------- */
+export function useAdjustEta(branchId?: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    Order,
+    Error,
+    { orderId: string; etaMinutes: number },
+    { previousData?: TodayOrdersResponse }
+  >({
+    mutationFn: ({ orderId, etaMinutes }) => {
+      console.log('orderId etaMinutes', orderId, etaMinutes);
+      return apiRequest<Order>('POST', `/orders/${orderId}/adjust-eta`, {
+        minutes: etaMinutes,
+      });
+    },
+
+    onMutate: async ({ orderId, etaMinutes }) => {
+      await queryClient.cancelQueries({
+        queryKey: ['orders', 'today', branchId],
+      });
+
+      const previousData = queryClient.getQueryData<TodayOrdersResponse>([
+        'orders',
+        'today',
+        branchId,
+      ]);
+      if (previousData) {
+        queryClient.setQueryData<TodayOrdersResponse>(
+          ['orders', 'today', branchId],
+          {
+            ...previousData,
+            orders: previousData.orders.map(o =>
+              o.id === orderId ? { ...o, etaMinutes } : o,
+            ),
+          },
+        );
+      }
+
+      return { previousData };
+    },
+
+    onError: (_err, _vars, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(
+          ['orders', 'today', branchId],
+          context.previousData,
+        );
+      }
+    },
+
     onSettled: () => {
       queryClient.invalidateQueries({
         queryKey: ['orders', 'today', branchId],

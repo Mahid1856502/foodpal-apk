@@ -24,11 +24,11 @@ function Navigator() {
 export default function RootNavigator() {
   return (
     <AuthProvider>
-      <NewOrderProvider>
-        <NavigationContainer>
+      <NavigationContainer>
+        <NewOrderProvider>
           <Navigator />
-        </NavigationContainer>
-      </NewOrderProvider>
+        </NewOrderProvider>
+      </NavigationContainer>
     </AuthProvider>
   );
 }

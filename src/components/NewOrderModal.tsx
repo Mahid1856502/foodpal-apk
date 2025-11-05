@@ -1,13 +1,21 @@
-import React, { useState } from 'react';
-import { Modal, View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  Modal,
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  ActivityIndicator,
+} from 'react-native';
 import { Order } from '../types/base';
 import Icon from '@react-native-vector-icons/feather';
 
 interface NewOrderModalProps {
   visible: boolean;
   order?: Order;
+  isAccepting?: boolean;
   onClose: () => void;
-  onAccept: (orderId: string, etaMinutes: number) => void;
+  onAccept: (order: Order, etaMinutes: number) => void;
   onReject: (orderId: string) => void;
 }
 
@@ -16,9 +24,14 @@ export default function NewOrderModal({
   order,
   onClose,
   onAccept,
+  isAccepting,
   onReject,
 }: NewOrderModalProps) {
   const [eta, setEta] = useState(45);
+
+  useEffect(() => {
+    if (order?.etaMinutes) setEta(order.etaMinutes);
+  }, [order?.etaMinutes]);
 
   if (!order) return null;
 
@@ -56,12 +69,13 @@ export default function NewOrderModal({
             </View>
 
             <TouchableOpacity
-              className="bg-green-200 border border-green-700 p-3 rounded-lg"
+              className="bg-green-200 border border-green-700 p-3 rounded-lg flex-row items-center justify-center"
               onPress={() => {
-                onAccept(order.id, eta);
-                onClose();
+                onAccept(order, eta);
               }}
+              disabled={isAccepting}
             >
+              {isAccepting && <ActivityIndicator />}
               <Text className="text-green-950 text-center font-semibold text-lg">
                 Accept Order
               </Text>
@@ -137,7 +151,6 @@ export default function NewOrderModal({
                 className="bg-red-400 border border-red-700  flex-1 p-3 rounded-lg mr-2"
                 onPress={() => {
                   onReject(order.id);
-                  onClose();
                 }}
               >
                 <Text className="text-center font-bold text-white ">

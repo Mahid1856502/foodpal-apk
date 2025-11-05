@@ -102,7 +102,7 @@ const OrderMenuPopup: React.FC<OrderMenuPopupProps> = ({
                 All items are currently available.
               </Text>
             </TouchableOpacity>
-
+            {/* 
             <TouchableOpacity
               className="active:opacity-70"
               onPress={() => navigation.navigate('StopOrders' as never)}
@@ -113,7 +113,7 @@ const OrderMenuPopup: React.FC<OrderMenuPopupProps> = ({
               <Text className="text-sm text-neutral-400 mt-1">
                 You’re currently ready to accept new orders.
               </Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
 
             <TouchableOpacity
               className="active:opacity-70 mt-3"
